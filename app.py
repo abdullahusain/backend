@@ -6,6 +6,7 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 import pandas as pd
 import os
 import sys
+import requests
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -65,6 +66,25 @@ except Exception as e:
     print(f"❌ Error loading movies.csv: {e}")
     sys.exit()
 
+# OMDb API Key and Base URL
+OMDB_API_KEY = "d8eec40d"
+OMDB_BASE_URL = "http://www.omdbapi.com/"
+
+def fetch_movie_poster(movie_name):
+    """Fetch movie poster from OMDb API"""
+    try:
+        params = {"t": movie_name, "apikey": OMDB_API_KEY}
+        response = requests.get(OMDB_BASE_URL, params=params)
+        data = response.json()
+        
+        if data.get("Response") == "True":
+            return data.get("Poster", "https://via.placeholder.com/200?text=No+Image")
+        else:
+            return "https://via.placeholder.com/200?text=No+Image"
+    except Exception as e:
+        print(f"Error fetching poster for {movie_name}: {e}")
+        return "https://via.placeholder.com/200?text=No+Image"
+
 # Flask routes
 @app.route('/signup', methods=['POST'])
 def signup():
@@ -123,7 +143,10 @@ def recommend_movies(emotion):
 
         movie_samples = filtered_movies.sample(min(3, len(filtered_movies)), replace=False)
         recommendations = []
+        
         for _, row in movie_samples.iterrows():
+            poster_url = fetch_movie_poster(row['name'])  # Fetch real movie poster
+
             recommendations.append({
                 "name": row['name'],
                 "year": row['year'],
@@ -132,7 +155,7 @@ def recommend_movies(emotion):
                 "genres": row['genres'],
                 "release_date": row['release_date'],
                 "rating": row['rating'],
-                "image_url": f"https://via.placeholder.com/200?text={row['name']}"
+                "image_url": poster_url  # Use real poster URL
             })
 
         print(f"Recommendations: {recommendations}")
