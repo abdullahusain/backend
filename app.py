@@ -46,11 +46,17 @@ try:
     movies['genres'] = movies['genres'].astype(str)
     print("Available genres:", movies['genres'].unique())
 
+    # Extract all unique sub-genres from the dataset
+    all_genres = set()
+    for genre_list in movies['genres'].dropna():
+        for genre in genre_list.split(";"):  # Split multi-genre rows
+            all_genres.add(genre.strip().lower())  # Standardize genres
+
     emotion_to_genres = {
         "happy": ["comedy", "animation", "music", "romance", "fantasy"],
         "sad": ["drama", "biography", "history", "war"],
         "angry": ["action", "thriller", "crime"],
-        "mixed": list(movies['genres'].unique())  # Use all genres for mixed emotions
+        "mixed": list(all_genres)  # Use all extracted sub-genres
     }
 except FileNotFoundError:
     print("❌ Error: movies.csv file not found. Please ensure it is in the same directory.")
@@ -105,8 +111,9 @@ def recommend_movies(emotion):
 
         print(f"Genres for emotion '{emotion}': {genres}")
 
+        # Filter movies based on genres (handling multiple genres per movie)
         filtered_movies = movies[movies['genres'].apply(
-            lambda x: any(genre.lower().strip() in [g.lower().strip() for g in x.split(";")] for genre in genres)
+            lambda x: any(genre.lower().strip() in x.lower() for genre in genres)
         )]
 
         print(f"Number of matched movies: {len(filtered_movies)}")
