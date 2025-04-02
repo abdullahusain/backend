@@ -1,22 +1,22 @@
-# Install required packages
-# Run these commands in your terminal before starting:
-# pip install flask flask-cors pandas sqlalchemy pyngrok waitress
-
 # Import necessary modules
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from sqlalchemy import create_engine, Column, String, Integer
 from sqlalchemy.orm import declarative_base, sessionmaker
-from pyngrok import ngrok
 import pandas as pd
+import os
 import sys
 
 # Initialize Flask app
 app = Flask(__name__)
 CORS(app)
 
-# Database setup using SQLite
-DATABASE_URL = 'sqlite:///users.db'
+# Database setup using SQLite (stored in Render-compatible directory)
+DB_DIR = "/opt/render/db/"
+os.makedirs(DB_DIR, exist_ok=True)  # Ensure directory exists
+DB_PATH = os.path.join(DB_DIR, "users.db")
+DATABASE_URL = f'sqlite:///{DB_PATH}'
+
 engine = create_engine(DATABASE_URL, echo=False)
 Base = declarative_base()
 
@@ -39,16 +39,13 @@ try:
     print("Columns in dataset:", movies.columns)
 
     required_columns = ['name', 'year', 'movie_rated', 'run_length', 'genres', 'release_date', 'rating']
-    # Ensure all required columns are present
     if not all(col in movies.columns for col in required_columns):
         print("❌ Error: Missing required columns in movies.csv")
         sys.exit()
 
-    # Ensure 'genres' column values are string
     movies['genres'] = movies['genres'].astype(str)
     print("Available genres:", movies['genres'].unique())
 
-    # Emotion-to-genres mapping
     emotion_to_genres = {
         "happy": ["comedy", "animation", "music", "romance", "fantasy"],
         "sad": ["drama", "biography", "history", "war"],
@@ -101,15 +98,13 @@ def login():
 def recommend_movies(emotion):
     try:
         print(f"Emotion received: {emotion}")
-
-        # Get genres for the given emotion
         genres = emotion_to_genres.get(emotion, [])
+
         if not genres:
             return jsonify({"message": "Invalid emotion"}), 400
 
         print(f"Genres for emotion '{emotion}': {genres}")
 
-        # Filter movies based on genres, accounting for multiple genres
         filtered_movies = movies[movies['genres'].apply(
             lambda x: any(genre.lower().strip() in [g.lower().strip() for g in x.split(";")] for genre in genres)
         )]
@@ -117,10 +112,8 @@ def recommend_movies(emotion):
         print(f"Number of matched movies: {len(filtered_movies)}")
 
         if filtered_movies.empty:
-            print("No movies match the given emotion.")
-            return jsonify([])  # Return an empty list if no matches found
+            return jsonify([])
 
-        # Sample up to 3 movies
         movie_samples = filtered_movies.sample(min(3, len(filtered_movies)), replace=False)
         recommendations = []
         for _, row in movie_samples.iterrows():
@@ -141,25 +134,8 @@ def recommend_movies(emotion):
         print(f"Error in recommend_movies: {e}")
         return jsonify({"message": "Internal Server Error"}), 500
 
-
-
-# Function to start Waitress and Ngrok
-def start_server():
-    try:
-        # Set Ngrok authtoken
-        ngrok.set_auth_token("2t41BULWDTjpJKB62VVGwv5bXgZ_3g5j5aSmoqaBy5m1juRMC")  # Replace with your actual token
-
-        # Start Ngrok tunnel
-        public_url = ngrok.connect(5000)
-        print("\n🌐 Ngrok Public URL:", public_url.public_url)
-
-        # Start Waitress server
-        from waitress import serve
-        print("\n🚀 Starting Waitress server...")
-        serve(app, host='0.0.0.0', port=5000)
-    except Exception as e:
-        print(f"❌ Error starting server: {e}")
-        sys.exit()
-
+# Start Waitress server (Render will handle exposing ports)
 if __name__ == '__main__':
-    start_server()
+    from waitress import serve
+    print("\n🚀 Starting Waitress server...")
+    serve(app, host='0.0.0.0', port=10000)  # Use Render-assigned port
